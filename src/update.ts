@@ -14,7 +14,7 @@ import {
 } from './update-source.ts';
 import { cloneRepo, cleanupTempDir } from './git.ts';
 import { discoverSkills } from './skills.ts';
-import { fetchRepoTree, findSkillMdPaths, getSkillFolderHashFromTree } from './blob.ts';
+import { fetchRepoTree, getSkillFolderHashFromTree } from './blob.ts';
 import { removeCommand } from './remove.ts';
 import { sanitizeMetadata } from './sanitize.ts';
 import { track } from './telemetry.ts';
@@ -347,7 +347,9 @@ export async function updateGlobalSkills(
           continue;
         }
 
-        const discoveredPaths = findSkillMdPaths(tree);
+        const discoveredPaths = tree.tree
+          .filter((entry) => entry.type === 'blob')
+          .map((entry) => entry.path);
 
         const allLockedForSource = Object.entries(lock.skills)
           .filter(([_, entry]) => entry.source === source)
@@ -377,9 +379,11 @@ export async function updateGlobalSkills(
       }
 
       tempDir = await cloneRepo(sourceUrl, firstEntry.ref);
-      const discoveredPaths = (await discoverSkills(tempDir)).map((skill) => {
-        return join(relative(tempDir!, skill.path), 'SKILL.md').split(sep).join('/');
-      });
+      const discoveredPaths = (await discoverSkills(tempDir, undefined, { fullDepth: true })).map(
+        (skill) => {
+          return join(relative(tempDir!, skill.path), 'SKILL.md').split(sep).join('/');
+        }
+      );
 
       const allLockedForSource = Object.entries(lock.skills)
         .filter(([_, entry]) => entry.source === source)
@@ -576,7 +580,7 @@ export async function updateProjectSkills(
 
     try {
       tempDir = await cloneRepo(sourceUrl, ref);
-      const discovered = await discoverSkills(tempDir);
+      const discovered = await discoverSkills(tempDir, undefined, { fullDepth: true });
 
       const discoveredPaths = discovered.map((s) => {
         const relPath = relative(tempDir!, s.path);
