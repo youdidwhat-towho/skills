@@ -11,6 +11,7 @@ import {
   formatSourceInput,
   buildUpdateInstallSource,
   buildLocalUpdateSource,
+  shouldUseFullDepthForUpdate,
 } from './update-source.ts';
 import { cloneRepo, cleanupTempDir } from './git.ts';
 import { discoverSkills } from './skills.ts';
@@ -464,16 +465,21 @@ export async function updateGlobalSkills(
       );
       continue;
     }
-    const result = spawnSync(process.execPath, [cliEntry, 'add', installUrl, '-g', '-y'], {
-      stdio: ['inherit', 'pipe', 'pipe'],
-      encoding: 'utf-8',
-      // Never spawn through a shell. process.execPath is an absolute path to the
-      // node binary, so no shell is needed to resolve it. installUrl is derived
-      // from the lock file (and ref is URL-decoded, so influenceable by whoever
-      // publishes a skill); a shell on Windows would let metacharacters in that
-      // value inject commands. Passing argv directly keeps it inert.
-      shell: false,
-    });
+    const fullDepthArgs = shouldUseFullDepthForUpdate(update.entry) ? ['--full-depth'] : [];
+    const result = spawnSync(
+      process.execPath,
+      [cliEntry, 'add', installUrl, ...fullDepthArgs, '-g', '-y'],
+      {
+        stdio: ['inherit', 'pipe', 'pipe'],
+        encoding: 'utf-8',
+        // Never spawn through a shell. process.execPath is an absolute path to the
+        // node binary, so no shell is needed to resolve it. installUrl is derived
+        // from the lock file (and ref is URL-decoded, so influenceable by whoever
+        // publishes a skill); a shell on Windows would let metacharacters in that
+        // value inject commands. Passing argv directly keeps it inert.
+        shell: false,
+      }
+    );
 
     if (result.status === 0) {
       successCount++;
@@ -622,10 +628,20 @@ export async function updateProjectSkills(
       const subagentArgs = skill.entry.subagents?.length
         ? ['--subagent', ...skill.entry.subagents.map((s) => (s === '' ? 'root' : s))]
         : [];
+      const fullDepthArgs = shouldUseFullDepthForUpdate(skill.entry) ? ['--full-depth'] : [];
 
       const result = spawnSync(
         process.execPath,
-        [cliEntry, 'add', installUrl, '--skill', skill.name, ...subagentArgs, '-y'],
+        [
+          cliEntry,
+          'add',
+          installUrl,
+          '--skill',
+          skill.name,
+          ...subagentArgs,
+          ...fullDepthArgs,
+          '-y',
+        ],
         {
           stdio: ['inherit', 'pipe', 'pipe'],
           encoding: 'utf-8',

@@ -78,6 +78,15 @@ function getLocalSource(entry: LocalUpdateSourceEntry): string | null {
   return entry.source;
 }
 
+export function shouldUseFullDepthForUpdate(entry: LocalUpdateSourceEntry): boolean {
+  if (!entry.skillPath) return false;
+
+  const source =
+    entry.sourceType && entry.sourceType !== 'github' ? getLocalSource(entry) : entry.source;
+
+  return source !== null && !supportsAppendedSubpath(source);
+}
+
 function appendFolderAndRef(source: string, skillPath: string, ref?: string): string {
   if (!supportsAppendedSubpath(source)) {
     return formatSourceInput(source, ref);

@@ -237,7 +237,7 @@ describe('Update Cleanup Unit Tests', () => {
           'skill-a': {
             source: 'acme/skills',
             sourceUrl: 'https://gitlab.example.com/acme/skills.git',
-            skillPath: 'skills/skill-a/SKILL.md',
+            skillPath: 'plugins/example/skills/skill-a/SKILL.md',
             sourceType: 'git',
             computedHash: 'abc',
           },
@@ -246,7 +246,12 @@ describe('Update Cleanup Unit Tests', () => {
 
       vi.mocked(git.cloneRepo).mockResolvedValue('/tmp/repo');
       vi.mocked(skills.discoverSkills).mockResolvedValue([
-        { name: 'skill-a', path: '/tmp/repo/skills/skill-a', description: 'A', rawContent: '' },
+        {
+          name: 'skill-a',
+          path: '/tmp/repo/plugins/example/skills/skill-a',
+          description: 'Deep skill',
+          rawContent: '',
+        },
       ]);
 
       await updateProjectSkills({ yes: true });
@@ -264,6 +269,40 @@ describe('Update Cleanup Unit Tests', () => {
         expect.arrayContaining(['add', 'https://gitlab.example.com/acme/skills.git', '--skill'])
       );
       expect(argv).not.toEqual(expect.arrayContaining(['acme/skills']));
+      expect(argv).toContain('--full-depth');
+    });
+
+    it('keeps GitHub project updates path-targeted without full-depth discovery', async () => {
+      vi.mocked(localLock.readLocalLock).mockResolvedValue({
+        version: 1,
+        skills: {
+          'skill-a': {
+            source: 'owner/repo',
+            sourceType: 'github',
+            skillPath: 'plugins/example/skills/skill-a/SKILL.md',
+            computedHash: 'abc',
+          },
+        },
+      });
+      vi.mocked(git.cloneRepo).mockResolvedValue('/tmp/repo');
+      vi.mocked(skills.discoverSkills).mockResolvedValue([
+        {
+          name: 'skill-a',
+          path: '/tmp/repo/plugins/example/skills/skill-a',
+          description: 'Deep skill',
+          rawContent: '',
+        },
+      ]);
+
+      await updateProjectSkills({ yes: true });
+
+      const installCall = vi
+        .mocked(spawnSync)
+        .mock.calls.find((call) => Array.isArray(call[1]) && call[1].includes('add'));
+      expect(installCall).toBeDefined();
+      const [, argv] = installCall!;
+      expect(argv).toContain('owner/repo/plugins/example/skills/skill-a');
+      expect(argv).not.toContain('--full-depth');
     });
 
     it('does not reinterpret generic git shorthands as GitHub during project update', async () => {
@@ -420,7 +459,7 @@ describe('Update Cleanup Unit Tests', () => {
           'skill-a': {
             source: 'git@github.com:owner/repo.git',
             sourceUrl: 'git@github.com:owner/repo.git',
-            skillPath: 'skills/skill-a/SKILL.md',
+            skillPath: 'plugins/example/skills/skill-a/SKILL.md',
             sourceType: 'git',
             skillFolderHash: 'old-hash',
             installedAt: '',
@@ -431,7 +470,12 @@ describe('Update Cleanup Unit Tests', () => {
 
       vi.mocked(git.cloneRepo).mockResolvedValue('/tmp/repo');
       vi.mocked(skills.discoverSkills).mockResolvedValue([
-        { name: 'skill-a', path: '/tmp/repo/skills/skill-a', description: 'A', rawContent: '' },
+        {
+          name: 'skill-a',
+          path: '/tmp/repo/plugins/example/skills/skill-a',
+          description: 'Deep skill',
+          rawContent: '',
+        },
       ]);
       vi.mocked(localLock.computeSkillFolderHash).mockResolvedValue('new-hash');
 
@@ -439,8 +483,14 @@ describe('Update Cleanup Unit Tests', () => {
 
       expect(git.cloneRepo).toHaveBeenCalledWith('git@github.com:owner/repo.git', undefined);
       expect(localLock.computeSkillFolderHash).toHaveBeenCalledWith(
-        join('/tmp/repo', 'skills/skill-a')
+        join('/tmp/repo', 'plugins/example/skills/skill-a')
       );
+      const installCall = vi
+        .mocked(spawnSync)
+        .mock.calls.find((call) => Array.isArray(call[1]) && call[1].includes('add'));
+      expect(installCall).toBeDefined();
+      const [, argv] = installCall!;
+      expect(argv).toContain('--full-depth');
     });
 
     it('uses sourceUrl when updating global non-GitHub sources with host-stripped source', async () => {
